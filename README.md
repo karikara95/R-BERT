@@ -1,5 +1,12 @@
 # R-BERT for An Annotated PubMed Corpus to Support Supervised Relation Extraction between Suicide-Related Entities and Drugs
 
+Adapted from
+
+# R-BERT 
+
+(description below)
+
+
 [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/enriching-pre-trained-language-model-with/relation-extraction-on-semeval-2010-task-8)](https://paperswithcode.com/sota/relation-extraction-on-semeval-2010-task-8?p=enriching-pre-trained-language-model-with)
 
 (Unofficial) Pytorch implementation of `R-BERT`: [Enriching Pre-trained Language Model with Entity Information for Relation Classification](https://arxiv.org/abs/1905.08284)
