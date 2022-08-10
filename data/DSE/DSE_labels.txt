@@ -1,0 +1,4 @@
+DRUG_Event(e1,e2)
+DRUG-ADE(e1,e2)
+DRUG_Event(e2,e1)
+DRUG-ADE(e2,e1)

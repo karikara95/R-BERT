@@ -21,16 +21,20 @@ def load_tokenizer(args):
     return tokenizer
 
 
-def write_prediction(args, output_file, preds):
+def write_prediction(args, output_file, preds, train_idx):
     """
     For official evaluation script
     :param output_file: prediction_file_path (e.g. eval/proposed_answers.txt)
     :param preds: [0,1,0,2,18,...]
     """
     relation_labels = get_label(args)
+
+    if not os.path.exists(os.path.dirname(output_file)):
+        os.makedirs(os.path.dirname(output_file))
+
     with open(output_file, "w", encoding="utf-8") as f:
         for idx, pred in enumerate(preds):
-            f.write("{}\t{}\n".format(8001 + idx, relation_labels[pred]))
+            f.write("{}\t{}\n".format(train_idx+1 + idx, relation_labels[pred]))
 
 
 def init_logger():
@@ -49,18 +53,53 @@ def set_seed(args):
         torch.cuda.manual_seed_all(args.seed)
 
 
-def compute_metrics(preds, labels):
+def compute_metrics(preds, labels, eval_dir,eval_script):
     assert len(preds) == len(labels)
-    return acc_and_f1(preds, labels)
+    return acc_and_f1(preds, labels, eval_dir,eval_script)
 
 
 def simple_accuracy(preds, labels):
     return (preds == labels).mean()
 
 
-def acc_and_f1(preds, labels, average="macro"):
+def acc_and_f1(preds, labels, eval_dir,eval_script,average="macro"):
     acc = simple_accuracy(preds, labels)
     return {
         "acc": acc,
-        "f1": official_f1(),
+        "f1": official_f1(eval_dir, eval_script),
     }
+
+def my_calculate_score(df, labels,**kwargs):
+    from sklearn.metrics import precision_recall_fscore_support as f1_score
+    from sklearn.metrics import confusion_matrix as confusion_matrix
+    import warnings
+    import sklearn.exceptions
+    import re
+    warnings.filterwarnings("ignore", category=sklearn.exceptions.UndefinedMetricWarning)
+    import numpy as np
+
+    # labels = sorted(df['Y'].unique())
+
+    if "ignore_direction" in kwargs and kwargs.get("ignore_direction"):
+        Y=df.Y.str.replace(r'\(.*?\)', r'', regex=True)
+        pred_Y = df["^Y"].str.replace(r'\(.*?\)', r'', regex=True)
+        labels=list(dict.fromkeys([re.sub("\(.*?\)", "", _) for _ in labels]))
+
+    else:
+        Y = df["Y"]
+        pred_Y = df[kwargs.get("threshold") if "threshold" in kwargs else "^Y"]
+
+    precision, recall, fscore, support = f1_score(Y, pred_Y, labels=labels)
+
+    confM = confusion_matrix(Y, pred_Y)
+
+    accuracy=confM.diagonal()/confM.sum(axis=1)
+
+    return dict(labels=labels,
+                precision=precision.tolist(),
+                recall=recall.tolist(),
+                fscore=fscore.tolist(),
+                support=support.tolist(),
+                accuracy=accuracy.tolist(),
+                confusion_matrix=confM.tolist()) #ndarray cannot be saved as jsonfile
+

@@ -8,7 +8,7 @@ from tqdm import tqdm, trange
 from transformers import AdamW, BertConfig, get_linear_schedule_with_warmup
 
 from model import RBERT
-from utils import compute_metrics, get_label, write_prediction
+from utils import compute_metrics, get_label, write_prediction, my_calculate_score
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ class Trainer(object):
     def __init__(self, args, train_dataset=None, dev_dataset=None, test_dataset=None):
         self.args = args
         self.train_dataset = train_dataset
+        # print(len(self.train_dataset))
         self.dev_dataset = dev_dataset
         self.test_dataset = test_dataset
 
@@ -122,7 +123,11 @@ class Trainer(object):
                     global_step += 1
 
                     if self.args.logging_steps > 0 and global_step % self.args.logging_steps == 0:
-                        self.evaluate("test")  # There is no dev set for semeval task
+                        if self.args.task=="semeval":
+                            self.evaluate("test")# There is no dev set for semeval task , DSE have the dev dataset
+                        elif self.args.task=="dse":
+                            self.evaluate("dev")
+
 
                     if self.args.save_steps > 0 and global_step % self.args.save_steps == 0:
                         self.save_model()
@@ -137,7 +142,7 @@ class Trainer(object):
 
         return global_step, tr_loss / global_step
 
-    def evaluate(self, mode):
+    def evaluate(self, mode, f1_ignore_direction=True):
         # We use test dataset because semeval doesn't have dev dataset
         if mode == "test":
             dataset = self.test_dataset
@@ -171,7 +176,7 @@ class Trainer(object):
                     "e1_mask": batch[4],
                     "e2_mask": batch[5],
                 }
-                outputs = self.model(**inputs)
+                outputs = self.model(**inputs) #TODO crushing
                 tmp_eval_loss, logits = outputs[:2]
 
                 eval_loss += tmp_eval_loss.mean().item()
@@ -187,14 +192,23 @@ class Trainer(object):
         eval_loss = eval_loss / nb_eval_steps
         results = {"loss": eval_loss}
         preds = np.argmax(preds, axis=1)
-        write_prediction(self.args, os.path.join(self.args.eval_dir, "proposed_answers.txt"), preds)
+        write_prediction(self.args, os.path.join(self.args.eval_dir, "proposed_answers.txt"), preds, train_idx=len(self.train_dataset))#TODO
 
-        result = compute_metrics(preds, out_label_ids)
-        results.update(result)
 
-        logger.info("***** Eval results *****")
-        for key in sorted(results.keys()):
-            logger.info("  {} = {:.4f}".format(key, results[key]))
+        """self-made F1 evaluation"""
+        import pandas as pd
+        labels=get_label(self.args)
+        df=pd.read_csv(os.path.join(self.args.data_dir,self.args.test_file) , sep='\t', header=None, names=["Y","sent"], usecols=["Y"])
+        df["^Y"]=[labels[_] for _ in preds.tolist()]
+
+        results = my_calculate_score(df,labels, ignore_direction=f1_ignore_direction)  # new F1 calculating
+
+        #official eval does not work as its made exclusively for SemEval dataset
+        # result = compute_metrics(preds, out_label_ids,self.args.eval_dir,self.args.eval_script)
+        # results.update(result)
+        # logger.info("***** Eval results *****")
+        # for key in sorted(results.keys()):
+        #     logger.info("  {} = {:.4f}".format(key, results[key]))
 
         return results
 
@@ -206,7 +220,7 @@ class Trainer(object):
         model_to_save.save_pretrained(self.args.model_dir)
 
         # Save training arguments together with the trained model
-        torch.save(self.args, os.path.join(self.args.model_dir, "training_args.bin"))
+        torch.save(self.args, os.path.join(self.args.model_dir, "training_args.bin")) # FileNotFoundError: [Errno 2] No such file or directory: './model/DSE/rdd90_0-1/training_args.bin'
         logger.info("Saving model checkpoint to %s", self.args.model_dir)
 
     def load_model(self):
@@ -218,3 +232,4 @@ class Trainer(object):
         self.model = RBERT.from_pretrained(self.args.model_dir, args=self.args)
         self.model.to(self.device)
         logger.info("***** Model Loaded *****")
+        logger.info(self.config)

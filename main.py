@@ -11,16 +11,28 @@ def main(args):
     tokenizer = load_tokenizer(args)
 
     train_dataset = load_and_cache_examples(args, tokenizer, mode="train")
+    dev_dataset = load_and_cache_examples(args, tokenizer, mode="dev")
     test_dataset = load_and_cache_examples(args, tokenizer, mode="test")
 
-    trainer = Trainer(args, train_dataset=train_dataset, test_dataset=test_dataset)
+    trainer = Trainer(args, train_dataset=train_dataset, test_dataset=test_dataset, dev_dataset=dev_dataset)
 
     if args.do_train:
         trainer.train()
 
     if args.do_eval:
-        trainer.load_model()
-        trainer.evaluate("test")
+        try:
+            trainer.load_model()
+        except Exception as e:
+            print(f"{e}")
+            print(f"Training...")
+            trainer.train()
+            trainer.load_model()
+        # print(trainer.config)
+        results=trainer.evaluate("test",f1_ignore_direction=args.f1_ignore_direction)
+
+        # print(results)
+        return results
+
 
 
 if __name__ == "__main__":
@@ -38,10 +50,17 @@ if __name__ == "__main__":
         "--eval_dir",
         default="./eval",
         type=str,
-        help="Evaluation script, result directory",
+        help="result directory",
+    )
+    parser.add_argument(
+        "--eval_script",
+        default="./eval/semeval2010_task8_scorer-v1.2.pl",
+        type=str,
+        help="Evaluation script",
     )
     parser.add_argument("--train_file", default="train.tsv", type=str, help="Train file")
     parser.add_argument("--test_file", default="test.tsv", type=str, help="Test file")
+    parser.add_argument("--dev_file", default="test.tsv", type=str, help="Dev file")
     parser.add_argument("--label_file", default="label.txt", type=str, help="Label file")
 
     parser.add_argument(
@@ -111,6 +130,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Add [SEP] token at the end of the sentence",
     )
+
+    """my arguments"""
+    parser.add_argument("--target_label", type=str, help="Label we show the F1 for")
+    parser.add_argument("--f1_ignore_direction", action="store_true", help="Whether to ignore dimensions when calculate F1 score.")
+
 
     args = parser.parse_args()
 
