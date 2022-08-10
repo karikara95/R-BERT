@@ -1,4 +1,7 @@
-# R-BERT for An Annotated PubMed Corpus to Support Supervised Relation Extraction between Suicide-Related Entities and Drugs
+# R-BERT for Drug-Suicide Relation Classification
+[An Annotated PubMed Corpus to Support Supervised Relation Extraction between Suicide-Related Entities and Drugs](http://preprints.jmir.org/preprint/41100)
+(includes embedding layer customization and dataset properties customization)
+
 
 Adapted from
 
